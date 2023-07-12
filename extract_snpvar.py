@@ -85,11 +85,10 @@ if __name__ == '__main__':
     
     
     #flip Z-sign if A1 of prior not match A1 of sumstats
-    if 'Z' in df.columns:
-        is_flipped = df['A2'] == df['A_eff']
-        if is_flipped.sum() > 0:
-            df.loc[is_flipped, 'Z'] *= -1
-            logging.info('Flipping the Z-sign of %d SNPs that A1 in sumstats = A2 in the per-SNP h2 data'%(is_flipped.sum()))
+    is_flipped = df['A2'] == df['A_eff']
+    if is_flipped.any() and 'Z' in df.columns:
+        df.loc[is_flipped, 'Z'] *= -1
+        logging.info('Flipping the Z-sign of %d SNPs that A1 in sumstats = A2 in the per-SNP h2 data'%(is_flipped.sum()))
             
     #drop unneeded columns
     df = df.drop(columns = 'A_eff')
