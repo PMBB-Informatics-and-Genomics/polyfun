@@ -17,7 +17,6 @@ def compute_Neff(df_sumstats, n, chi2_cutoff=30):
     
 
 def find_df_column(df, strings_to_find, allow_missing=False):
-    
     if isinstance(strings_to_find, str):
         strings_to_find = [strings_to_find]
         
@@ -30,30 +29,33 @@ def find_df_column(df, strings_to_find, allow_missing=False):
         else:
             raise ValueError('No matching column found among: %s'%str(strings_to_find))
     elif np.sum(is_relevant_col)>1:
-        raise ValueError('Too many matching columns found among: %s'%str(strings_to_find))
+        if df.columns[is_relevant_col][0] == 'ALT' and df.columns[is_relevant_col][1] == 'A1':
+            return 'A1'
+        else:
+            raise ValueError('Too many matching columns found among: %s'%str(strings_to_find))
     else:
         return df.columns[is_relevant_col][0]
         
         
 def rename_df_columns(df_sumstats):
-    chr_column = find_df_column(df_sumstats, ['CHR', 'CHROMOSOME', 'CHROM'])
-    bp_column = find_df_column(df_sumstats, ['BP', 'POS', 'POSITION', 'COORDINATE', 'BASEPAIR'])
-    snp_column = find_df_column(df_sumstats, ['SNP', 'RSID', 'RS', 'NAME', 'MarkerName'])
+    chr_column = find_df_column(df_sumstats, ['CHR', 'CHROMOSOME', 'CHROM', '#CHROM'])
+    bp_column = find_df_column(df_sumstats, ['BP', 'POS', 'POSITION', 'COORDINATE', 'BASEPAIR', 'GENPOS'])
+    snp_column = find_df_column(df_sumstats, ['MarkerID', 'SNP', 'RSID', 'RS', 'NAME', 'MarkerName', 'ID'])
     a1freq_col = find_df_column(df_sumstats, ['A1FREQ', 'freq', 'MAF', 'FRQ'], allow_missing=True)
     info_col = find_df_column(df_sumstats, 'INFO', allow_missing=True)
     beta_col = find_df_column(df_sumstats, ['BETA', 'EFF', 'EFFECT', 'EFFECT_SIZE', 'OR'], allow_missing=True)
     se_col = find_df_column(df_sumstats, ['SE'], allow_missing=True)
     pvalue_col = find_df_column(df_sumstats, ['P_BOLT_LMM', 'P', 'PVALUE', 'P-VALUE', 'P_value', 'PVAL'], allow_missing=True)
     z_col = find_df_column(df_sumstats, ['Z', 'ZSCORE', 'Z_SCORE'], allow_missing=True)    
-    n_col = find_df_column(df_sumstats, ['N', 'sample_size'], allow_missing=True)    
+    n_col = find_df_column(df_sumstats, ['N', 'OBS_CT', 'sample_size', 'NMISS'], allow_missing=True)    
     ncase_col = find_df_column(df_sumstats, ['N_cases', 'Ncase', 'Nca','Total_NCase'], allow_missing=True)    
     ncontrol_col = find_df_column(df_sumstats, ['N_controls', 'Ncontrol','Nco','Total_NControl'], allow_missing=True)    
     try:
-        allele1_col = find_df_column(df_sumstats, ['ALLELE1', 'A1', 'a1', 'a_1'])
-        allele0_col = find_df_column(df_sumstats, ['ALLELE0', 'A0', 'a0', 'a_0'])
+        allele1_col = find_df_column(df_sumstats, ['ALLELE1', 'A1', 'a1', 'a_1', 'ALT', 'Allele2'])
+        allele0_col = find_df_column(df_sumstats, ['ALLELE0', 'A0', 'a0', 'a_0', 'REF', 'Allele1'])
     except ValueError:
-        allele1_col = find_df_column(df_sumstats, ['ALLELE1', 'A1', 'a1', 'a_1'])
-        allele0_col = find_df_column(df_sumstats, ['ALLELE2', 'A2', 'a2', 'a_2'])
+        allele1_col = find_df_column(df_sumstats, ['ALLELE1', 'A1', 'a1', 'a_1', 'ALT'])
+        allele0_col = find_df_column(df_sumstats, ['ALLELE2', 'A2', 'a2', 'a_2', 'REF'])
     
     # make alleles uppercase
     df_sumstats[allele1_col] = df_sumstats[allele1_col].str.upper()
@@ -112,6 +114,13 @@ def filter_sumstats(df_sumstats, min_info_score=None, min_maf=None, remove_stran
     logging.info('%d SNPs are in the sumstats file'%(df_sumstats.shape[0]))
     is_good_snp = np.ones(df_sumstats.shape[0], dtype=np.bool)
     
+    # remove non-autosomes
+    is_autosome_snp = None
+    if df_sumstats['CHR'].dtype != int:
+        is_autosome_snp = ~df_sumstats['CHR'].astype(str).isin(['X', 'Y', 'MT'])
+        is_good_snp = is_good_snp & is_autosome_snp
+        if np.any(~is_autosome_snp):
+            logging.info('Removing %d SNPs not on Autosomes'%(np.sum(~is_autosome_snp)))
     #remove 'bad' BOLT-LMM SNPs
     if 'CHISQ_BOLT_LMM' in df_sumstats.columns:
         is_good_chi2_snp = df_sumstats['CHISQ_BOLT_LMM']>0
@@ -164,7 +173,9 @@ def filter_sumstats(df_sumstats, min_info_score=None, min_maf=None, remove_stran
             raise ValueError('No SNPs remained after all filtering stages')
         df_sumstats = df_sumstats.loc[is_good_snp]        
         logging.info('%d SNPs with sumstats remained after all filtering stages'%(df_sumstats.shape[0]))
-        
+    
+    if is_autosome_snp is not None and np.any(~is_autosome_snp):
+        df_sumstats['CHR'] = df_sumstats['CHR'].astype(int)
     return df_sumstats
     
     
@@ -200,12 +211,15 @@ def convert_odds_ratio_to_log(df_sumstats):
     if 'OR' not in df_sumstats.columns:
         return df_sumstats
 
+    df_sumstats = df_sumstats.dropna(subset=['OR'])
+
     # If there are negative values, assume it already contains log-odds
     if np.any(df_sumstats['OR']<0):
         return df_sumstats
 
     # If they are all greater than zero, log transform
     if np.all(df_sumstats['OR']>0):
+        print(4)
         df_sumstats['OR'] = np.log(df_sumstats['OR'])
         logging.info('Converting OR column to log-odds')
         return df_sumstats
@@ -246,7 +260,7 @@ if __name__ == '__main__':
     
     #convert odds-ratio to log-odds ratio if needed
     df_sumstats = convert_odds_ratio_to_log(df_sumstats)
-    
+
     #rename df_sumstats columns
     df_sumstats = rename_df_columns(df_sumstats)
 
