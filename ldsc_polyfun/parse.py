@@ -108,15 +108,16 @@ def sumstats(fh, alleles=True, dropna=True):
 
     try:
         x = read_csv(fh, usecols=usecols, dtype=dtype_dict, compression=compression)
+        
+        # x = read_csv(fh, dtype=dtype_dict, compression=compression)
     except (AttributeError, ValueError) as e:
         raise ValueError('Improperly formatted sumstats file: ' + str(e.args))
 
     if dropna:
         x = x.dropna(how='any')
-        
+    
     x = set_snpid_index(x)
-    x.drop(columns=['CHR', 'BP'], inplace=True)
-
+    x.drop(columns=['CHR', 'BP'], inplace=True) 
 
     return x
 

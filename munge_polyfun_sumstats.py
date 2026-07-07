@@ -39,20 +39,20 @@ def find_df_column(df, strings_to_find, allow_missing=False):
         
 def rename_df_columns(df_sumstats):
     chr_column = find_df_column(df_sumstats, ['CHR', 'CHROMOSOME', 'CHROM', '#CHROM'])
-    bp_column = find_df_column(df_sumstats, ['BP', 'POS', 'POSITION', 'COORDINATE', 'BASEPAIR', 'GENPOS'])
-    snp_column = find_df_column(df_sumstats, ['MarkerID', 'SNP', 'RSID', 'RS', 'NAME', 'MarkerName', 'ID'])
-    a1freq_col = find_df_column(df_sumstats, ['A1FREQ', 'freq', 'MAF', 'FRQ'], allow_missing=True)
+    bp_column = find_df_column(df_sumstats, ['BP', 'POS', 'POSITION', 'COORDINATE', 'BASEPAIR', 'GENPOS', 'BASE_PAIR_LOCATION'])
+    snp_column = find_df_column(df_sumstats, ['MarkerID', 'SNP', 'RSID', 'RS', 'NAME', 'MarkerName', 'ID', 'VARIANT_ID'])
+    a1freq_col = find_df_column(df_sumstats, ['A1FREQ', 'freq', 'MAF', 'FRQ', 'effect_allele_frequency'], allow_missing=True)
     info_col = find_df_column(df_sumstats, 'INFO', allow_missing=True)
     beta_col = find_df_column(df_sumstats, ['BETA', 'EFF', 'EFFECT', 'EFFECT_SIZE', 'OR'], allow_missing=True)
     se_col = find_df_column(df_sumstats, ['SE'], allow_missing=True)
     pvalue_col = find_df_column(df_sumstats, ['P_BOLT_LMM', 'P', 'PVALUE', 'P-VALUE', 'P_value', 'PVAL'], allow_missing=True)
     z_col = find_df_column(df_sumstats, ['Z', 'ZSCORE', 'Z_SCORE'], allow_missing=True)    
     n_col = find_df_column(df_sumstats, ['N', 'OBS_CT', 'sample_size', 'NMISS'], allow_missing=True)    
-    ncase_col = find_df_column(df_sumstats, ['N_cases', 'Ncase', 'Nca','Total_NCase'], allow_missing=True)    
-    ncontrol_col = find_df_column(df_sumstats, ['N_controls', 'Ncontrol','Nco','Total_NControl'], allow_missing=True)    
+    ncase_col = find_df_column(df_sumstats, ['N_cases', 'Ncase', 'Nca','Total_NCase', 'n_case'], allow_missing=True)    
+    ncontrol_col = find_df_column(df_sumstats, ['N_controls', 'Ncontrol','Nco','Total_NControl', 'n_control'], allow_missing=True)    
     try:
-        allele1_col = find_df_column(df_sumstats, ['ALLELE1', 'A1', 'a1', 'a_1', 'ALT', 'Allele2'])
-        allele0_col = find_df_column(df_sumstats, ['ALLELE0', 'A0', 'a0', 'a_0', 'REF', 'Allele1'])
+        allele1_col = find_df_column(df_sumstats, ['ALLELE1', 'A1', 'a1', 'a_1', 'ALT', 'Allele2', 'effect_allele'])
+        allele0_col = find_df_column(df_sumstats, ['ALLELE0', 'A0', 'a0', 'a_0', 'REF', 'Allele1', 'other_allele'])
     except ValueError:
         allele1_col = find_df_column(df_sumstats, ['ALLELE1', 'A1', 'a1', 'a_1', 'ALT'])
         allele0_col = find_df_column(df_sumstats, ['ALLELE2', 'A2', 'a2', 'a_2', 'REF'])
@@ -219,7 +219,6 @@ def convert_odds_ratio_to_log(df_sumstats):
 
     # If they are all greater than zero, log transform
     if np.all(df_sumstats['OR']>0):
-        print(4)
         df_sumstats['OR'] = np.log(df_sumstats['OR'])
         logging.info('Converting OR column to log-odds')
         return df_sumstats

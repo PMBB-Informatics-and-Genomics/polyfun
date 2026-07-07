@@ -1,1 +1,34 @@
+# Python bytecode
+*.pyc
+*.pyo
 __pycache__/
+
+# Large reference / data files
+*.gz
+*.tgz
+*.bed
+*.bgen
+*.bgen.bgi
+*.sample
+*.snplist
+*.snplist.bed
+*.txt.gz
+w_hm3*
+hm3_b*
+hapmap_snps/
+ldstore_v2.0_x86_64/
+ldstore_v2.0_x86_64.tgz
+epimap_main_metadata_table.tsv
+Homo_sapiens*.gff3.gz
+genetic_map_*.txt.gz
+
+# Log files
+*.log
+create_env.log
+make_env.log
+
+# Scratch files
+snps_1col.txt
+new_finemapper.py
+wrapper_biofilter.sh
+polyfun.pyc
