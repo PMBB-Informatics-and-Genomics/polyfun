@@ -202,19 +202,12 @@ def sanity_checks(df_sumstats):
              df_sumstats['A1'].astype('str') + '.' + \
              df_sumstats['A2'].astype('str')
     n_dup = df_snp.duplicated().sum()
-<<<<<<< HEAD
     if n_dup > 0 and (len(df_snp) - n_dup) > 4E5:
         import warnings
         warnings.warn(f'Dropping {n_dup} duplicate SNPs (CHR.BP.A1.A2)')
         df_sumstats.drop(index=df_sumstats.index[df_snp.duplicated()], inplace=True)
-    elif (len(df_snp) - n_dup) <= 4E5:
+    elif n_dup > 0 and (len(df_snp) - n_dup) <= 4E5:
         raise ValueError('The input file includes duplicate SNPs, and removing them would leave fewer than 400k variants.')
-=======
-    if n_dup > 0:
-        import warnings
-        warnings.warn(f'Dropping {n_dup} duplicate SNPs (same CHR.BP.A1.A2) from sumstats.')
-        df_sumstats.drop(index=df_sumstats.index[df_snp.duplicated()], inplace=True)
->>>>>>> 1b2cae8 (sanity_checks: drop duplicate SNPs instead of raising (GWAMA meta files))
     
     #compute Z    
     
