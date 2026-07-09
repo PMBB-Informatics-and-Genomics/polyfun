@@ -149,13 +149,13 @@ def _read_w_ld(args, log):
 
 
 def _read_chr_split_files(chr_arg, not_chr_arg, log, noun, parsefunc, **kwargs):
-    '''Read files split across 22 chromosomes (annot, ref_ld, w_ld).'''
+    '''Read files split across chromosomes (annot, ref_ld, w_ld).'''
     try:
         if not_chr_arg:
             log.log('Reading {N} from {F} ...'.format(F=not_chr_arg, N=noun))
             out = parsefunc(_splitp(not_chr_arg), **kwargs)
         elif chr_arg:
-            f = ps.sub_chr(chr_arg, '[1-22]')
+            f = ps.sub_chr(chr_arg, '[1-%d]'%(_N_CHR))
             log.log('Reading {N} from {F} ...'.format(F=f, N=noun))
             out = parsefunc(_splitp(chr_arg), _N_CHR, **kwargs)
     except ValueError as e:
@@ -236,7 +236,7 @@ def _print_part_delete_values(ldscore_reg, ofh, log):
 
 def _merge_and_log(ld, sumstats, noun, log):
     '''Wrap smart merge with log messages about # of SNPs.'''
-    sumstats = smart_merge(ld, sumstats)
+    sumstats = smart_merge(ld, sumstats)    
     msg = 'After merging with {F}, {N} SNPs remain.'
     if len(sumstats) == 0:
         msg += ' Please make sure that your annotation files include the SNPs in your sumstats files (please see the PolyFun wiki for details on downloading functional annotations)'
@@ -248,6 +248,8 @@ def _merge_and_log(ld, sumstats, noun, log):
 
 
 def _read_ld_sumstats(args, log, fh, alleles=True, dropna=True):
+    global _N_CHR
+    _N_CHR = args.num_chr
     sumstats = _read_sumstats(args, log, fh, alleles=alleles, dropna=dropna)
     ref_ld = _read_ref_ld(args, log)
     n_annot = len(ref_ld.columns) - 2 #Changed to -2 because we also have chromosome column now
@@ -273,6 +275,7 @@ def _read_ld_sumstats(args, log, fh, alleles=True, dropna=True):
     
     M_annot, ref_ld, novar_cols = _check_variance(log, M_annot, ref_ld)
     w_ld = _read_w_ld(args, log)
+        
     sumstats = _merge_and_log(ref_ld, sumstats, 'reference panel LD', log)
     sumstats = _merge_and_log(sumstats, w_ld, 'regression SNP LD', log)
     w_ld_cname = sumstats.columns[-1]
@@ -282,6 +285,8 @@ def _read_ld_sumstats(args, log, fh, alleles=True, dropna=True):
 def estimate_h2(args, log):
     '''Estimate h2 and partitioned h2.'''
     args = copy.deepcopy(args)
+    global _N_CHR
+    _N_CHR = args.num_chr
     if args.samp_prev is not None and args.pop_prev is not None:
         args.samp_prev, args.pop_prev = list(map(
             float, [args.samp_prev, args.pop_prev]))
@@ -334,7 +339,8 @@ def estimate_h2(args, log):
                     evenodd_split=args.evenodd_split,
                     nn=args.nn,
                     keep_large=args.keep_large,
-                    nnls_exact=args.nnls_exact
+                    nnls_exact=args.nnls_exact,
+                    num_chr=args.num_chr
                     )
 
     if args.print_cov:

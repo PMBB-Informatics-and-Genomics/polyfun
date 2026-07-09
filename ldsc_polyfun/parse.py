@@ -32,12 +32,22 @@ def read_csv(fh, **kwargs):
     return df
     
 def set_snpid_index(df):
+    
+    def float_to_int(c):
+        try:
+            c = int(c)
+        except ValueError:
+            pass
+        return c
+    
     df['A1_first'] = (df['A1'] < df['A2']) | (df['A1'].str.len()>1) | (df['A2'].str.len()>1)
     df['A1s'] = df['A2'].copy()
     df.loc[df['A1_first'], 'A1s'] = df.loc[df['A1_first'], 'A1'].copy()
     df['A2s'] = df['A1'].copy()
     df.loc[df['A1_first'], 'A2s'] = df.loc[df['A1_first'], 'A2'].copy()
-    df.index = df['CHR'].astype(str) + '.' + df['BP'].astype(str) + '.' + df['A1s'] + '.' + df['A2s']
+    s_chr = df['CHR'].map(float_to_int).astype(str)
+    s_bp = df['BP'].astype(int).astype(str)
+    df.index = s_chr + '.' + s_bp + '.' + df['A1s'] + '.' + df['A2s']
     df.index.name = 'snpid'
     df.drop(columns=['A1_first', 'A1s', 'A2s'], inplace=True)
     return df
@@ -108,16 +118,15 @@ def sumstats(fh, alleles=True, dropna=True):
 
     try:
         x = read_csv(fh, usecols=usecols, dtype=dtype_dict, compression=compression)
-        
-        # x = read_csv(fh, dtype=dtype_dict, compression=compression)
     except (AttributeError, ValueError) as e:
         raise ValueError('Improperly formatted sumstats file: ' + str(e.args))
 
     if dropna:
         x = x.dropna(how='any')
-    
-    x = set_snpid_index(x)
-    x.drop(columns=['CHR', 'BP'], inplace=True) 
+        
+    x = set_snpid_index(x)    
+    x.drop(columns=['CHR', 'BP'], inplace=True)
+
 
     return x
 

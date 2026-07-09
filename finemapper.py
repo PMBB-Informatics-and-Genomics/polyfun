@@ -28,7 +28,7 @@ def splash_screen():
     print('*********************************************************************')
     print('* Fine-mapping Wrapper')
     print('* Version 1.0.0')
-    print('* (C) 2019-2022 Omer Weissbrod')
+    print('* (C) 2019-2024 Omer Weissbrod')
     print('*********************************************************************')
     print()
     
@@ -420,7 +420,7 @@ class Fine_Mapping(object):
             snp_chrom = rsid.chrom
             snp_pos = rsid.pos
             assert len(snp_alleles) == 2, 'cannot handle SNPs with more than two alleles'
-            df_snp = df_z.query('SNP == "%s"'%(rsid))
+            df_snp = df_z.query('SNP == "%s"'%(rsid.rsid))
             assert df_snp.shape[0]==1
             a1, a2 = df_snp['A1'].iloc[0], df_snp['A2'].iloc[0]
             snp_a1, snp_a2 = snp_alleles[0], snp_alleles[1]
@@ -428,8 +428,8 @@ class Fine_Mapping(object):
                 raise ValueError('The alleles for SNP %s are different in the sumstats and in the bgen file:\n \
                                  bgen:     A1=%s  A2=%s\n \
                                  sumstats: A1=%s  A2=%s \
-                                '%(rsid, snp_alleles[0], snp_alleles[1], a1, a2))
-            d = {'SNP':rsid, 'CHR':snp_chrom, 'BP':snp_pos, 'A1':snp_a1, 'A2':snp_a2}
+                                '%(rsid.rsid, snp_alleles[0], snp_alleles[1], a1, a2))
+            d = {'SNP':rsid.rsid, 'CHR':snp_chrom, 'BP':snp_pos, 'A1':snp_a1, 'A2':snp_a2}
             list_bgen.append(d)
         df_bgen = pd.DataFrame(list_bgen)
         df_bgen = set_snpid_index(df_bgen, allow_swapped_indel_alleles=self.allow_swapped_indel_alleles)
@@ -653,7 +653,7 @@ class Fine_Mapping(object):
         #take a maximally independent subset
         np.fill_diagonal(R_pot_csnp,0)
         import networkx as nx
-        G = nx.from_numpy_matrix(np.abs(R_pot_csnp)>R_cutoff)
+        G = nx.from_numpy_array(np.abs(R_pot_csnp)>R_cutoff)
         np.fill_diagonal(R_pot_csnp,1)
         inds = np.sort(nx.maximal_independent_set(G))
         
@@ -782,6 +782,8 @@ class SUSIE_Wrapper(Fine_Mapping):
             prior_var = h2_hess / num_causal_snps
             if prior_var <= 0:
                 raise ValueError('HESS estimates that the locus causally explains zero heritability')
+            if prior_var >= 1:
+                raise ValueError('HESS-estimated prior-var >1. The HESS estimator cannot be used in this locus.')
             logging.info('HESS estimated causal effect size variance: %0.4e'%(prior_var))
             
             if hess_resvar:
