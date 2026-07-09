@@ -51,8 +51,9 @@ def check_package_versions():
     try:
         import pandas_plink
     except (ImportError, ModuleNotFoundError):
-        raise ValueError('\n\nPlease install the python package pandas_plink (using either "pip install pandas-plink" or "conda install -c conda-forge pandas-plink")\n\n')
-    
+        import warnings
+        warnings.warn('pandas_plink not installed — fine-mapping (polyfun.py) will not work. '
+                      'Install with: conda install -c conda-forge pandas-plink') 
     
 def set_snpid_index(df, copy=False, allow_duplicates=False, allow_swapped_indel_alleles=False):
     if copy:
