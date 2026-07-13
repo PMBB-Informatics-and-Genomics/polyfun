@@ -181,9 +181,46 @@ def filter_sumstats(df_sumstats, min_info_score=None, min_maf=None, remove_stran
     
 
 def compute_casecontrol_neff(df_sumstats):
-    logging.info('Computing the effective sample size for case-control data...')    
+    logging.info('Computing the effective sample size for case-control data...')
     Neff = (4.0 / (1.0/df_sumstats['N_CASES'] + 1.0/df_sumstats['N_CONTROLS'])).astype(np.int64)
     return Neff
+
+
+def filter_hm3(df_sumstats, hm3_bim_path):
+    """Filter sumstats to SNPs present in a HapMap3 BIM file, matched by CHR:BP.
+
+    Matching is by genomic position (chromosome + base-pair) rather than rsID so
+    that the filter works regardless of the variant-ID format used in the sumstats
+    file (rsID, chr:pos:ref:alt, etc.).
+
+    Called after rename_df_columns() so that CHR and BP are already standardised.
+    """
+    logging.info('Loading HapMap3 positions from %s' % hm3_bim_path)
+    bim = pd.read_csv(hm3_bim_path, sep=r'\s+', header=None,
+                      usecols=[0, 3], names=['CHR', 'BP'], dtype=str)
+
+    # Normalise chromosome representation: strip 'chr' prefix, cast to int string
+    def _norm_chr(s):
+        s = str(s).lower()
+        if s.startswith('chr'):
+            s = s[3:]
+        try:
+            return str(int(s))
+        except ValueError:
+            return s   # keep 'x', 'y', 'mt', etc.
+
+    bim['CHR'] = bim['CHR'].map(_norm_chr)
+    hm3_pos = set(bim['CHR'] + ':' + bim['BP'])
+    logging.info('HapMap3 BIM contains %d positions' % len(hm3_pos))
+
+    n_before = len(df_sumstats)
+    chr_key = df_sumstats['CHR'].astype(str).map(_norm_chr)
+    bp_key  = df_sumstats['BP'].astype(str)
+    mask    = (chr_key + ':' + bp_key).isin(hm3_pos)
+    df_sumstats = df_sumstats.loc[mask]
+    logging.info('Retained %d / %d SNPs overlapping HapMap3 positions'
+                 % (len(df_sumstats), n_before))
+    return df_sumstats
 
 
 def sanity_checks(df_sumstats):
@@ -228,9 +265,12 @@ def convert_odds_ratio_to_log(df_sumstats):
         logging.info('Converting OR column to log-odds')
         return df_sumstats
 
-    # Edge case: No negative values, but contains zero(s)
+    # Edge case: No negative values, but contains zero(s) — drop with a warning
     if np.any(df_sumstats['OR']==0):
-        raise ValueError('The input file includes SNPs with an odds ratio (OR) of 0. Please remove these variant(s).')
+        n_zero = int((df_sumstats['OR']==0).sum())
+        import warnings
+        warnings.warn('Dropping %d SNPs with OR=0.' % n_zero)
+        df_sumstats = df_sumstats.loc[df_sumstats['OR'] != 0]
 
         
     
@@ -248,6 +288,7 @@ if __name__ == '__main__':
     parser.add_argument('--chi2-cutoff', type=float, default=30, help ='Chi2 cutoff for effective sample size computations')
     parser.add_argument('--keep-hla', default=False, action='store_true', help='If specified, Keep SNPs in the HLA region')
     parser.add_argument('--no-neff', default=False, action='store_true', help='If specified, use the true rather than the effective sample size in BOLT-LMM runs')
+    parser.add_argument('--hm3', default=None, help='Path to a HapMap3 PLINK .bim file. If provided, sumstats are filtered to SNPs present in the BIM by CHR:BP position before any other processing. Recommended for LDSC to reduce runtime.')
     args = parser.parse_args()
     
     #check package versions
@@ -268,6 +309,10 @@ if __name__ == '__main__':
     #rename df_sumstats columns
     df_sumstats = rename_df_columns(df_sumstats)
 
+    #filter to HapMap3 SNPs by CHR:BP (optional, recommended for LDSC)
+    if args.hm3 is not None:
+        df_sumstats = filter_hm3(df_sumstats, args.hm3)
+
     #filter sumstats
     df_sumstats = filter_sumstats(df_sumstats, min_info_score=args.min_info, min_maf=args.min_maf, remove_strand_ambig=args.remove_strand_ambig, keep_hla=args.keep_hla)
     
@@ -283,9 +328,13 @@ if __name__ == '__main__':
         df_sumstats['N']  = Neff
     elif args.n is not None:
         if 'N' in df_sumstats.columns:
-            raise ValueError('cannot both specify --n and have an N column in the sumstats file')
+            import warnings
+            warnings.warn('N column found in sumstats file; overriding with --n %d' % args.n)
+            df_sumstats = df_sumstats.drop(columns=['N'])
         if 'N_CASES' in df_sumstats.columns or 'N_CONTROLS' in df_sumstats.columns:
-            raise ValueError('cannot both specify --n and have an N_cases/N_controls column in the sumstats file')
+            import warnings
+            warnings.warn('N_cases/N_controls columns found; overriding with --n %d' % args.n)
+            df_sumstats = df_sumstats.drop(columns=[c for c in ['N_CASES','N_CONTROLS'] if c in df_sumstats.columns])
         df_sumstats['N']  = args.n
     elif 'N' in df_sumstats.columns:
         if 'N_CASES' in df_sumstats.columns or 'N_CONTROLS' in df_sumstats.columns:
