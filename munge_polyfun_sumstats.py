@@ -193,11 +193,48 @@ def filter_hm3(df_sumstats, hm3_bim_path):
     that the filter works regardless of the variant-ID format used in the sumstats
     file (rsID, chr:pos:ref:alt, etc.).
 
+    Supports three input formats for hm3_bim_path:
+      - UCSC BED 6-col (chr chromStart chromEnd rsID A1 A2):
+            detected when col1 is numeric → CHR=col0, BP=col1 (chromStart)
+      - PLINK BIM 6-col (CHR rsID CM BP A1 A2):
+            detected when col1 is non-numeric (rsID) → CHR=col0, BP=col3
+      - UCSC BED 4-col (chr chromStart chromEnd rsID):
+            → CHR=col0, BP=col1 (chromStart)
+
+    NOTE: UCSC BED chromStart is 0-based. GBMI/GWAMA POS values are also 0-based
+    (BED-style), so we match on col1 (chromStart), not col2 (chromEnd).
+
     Called after rename_df_columns() so that CHR and BP are already standardised.
     """
     logging.info('Loading HapMap3 positions from %s' % hm3_bim_path)
-    bim = pd.read_csv(hm3_bim_path, sep=r'\s+', header=None,
-                      usecols=[0, 3], names=['CHR', 'BP'], dtype=str)
+
+    # Peek to detect file format
+    peek = pd.read_csv(hm3_bim_path, sep=r'\s+', header=None,
+                       nrows=5, comment='#', dtype=str)
+    ncols = peek.shape[1]
+    if ncols == 6:
+        try:
+            int(peek.iloc[0, 1])
+            # UCSC BED 6-col: col1 is chromStart (integer) → use col1 as BP
+            logging.info('Detected UCSC BED 6-col format — using col1 (chromStart) as BP')
+            bim = pd.read_csv(hm3_bim_path, sep=r'\s+', header=None,
+                              usecols=[0, 1], names=['CHR', 'BP'],
+                              comment='#', dtype=str)
+        except ValueError:
+            # PLINK BIM: col1 is rsID string → use col3 as BP
+            logging.info('Detected PLINK BIM format — using col3 as BP')
+            bim = pd.read_csv(hm3_bim_path, sep=r'\s+', header=None,
+                              usecols=[0, 3], names=['CHR', 'BP'],
+                              comment='#', dtype=str)
+    elif ncols == 4:
+        # UCSC BED 4-col: chr chromStart chromEnd rsID → use col1 as BP
+        logging.info('Detected UCSC BED 4-col format — using col1 (chromStart) as BP')
+        bim = pd.read_csv(hm3_bim_path, sep=r'\s+', header=None,
+                          usecols=[0, 1], names=['CHR', 'BP'],
+                          comment='#', dtype=str)
+    else:
+        raise ValueError('Unexpected column count (%d) in HapMap3 file: %s'
+                         % (ncols, hm3_bim_path))
 
     # Normalise chromosome representation: strip 'chr' prefix, cast to int string
     def _norm_chr(s):
@@ -205,7 +242,7 @@ def filter_hm3(df_sumstats, hm3_bim_path):
         if s.startswith('chr'):
             s = s[3:]
         try:
-            return str(int(s))
+            return str(int(float(s)))   # handles "1", "1.0", "chr1.0"
         except ValueError:
             return s   # keep 'x', 'y', 'mt', etc.
 
@@ -215,7 +252,8 @@ def filter_hm3(df_sumstats, hm3_bim_path):
 
     n_before = len(df_sumstats)
     chr_key = df_sumstats['CHR'].astype(str).map(_norm_chr)
-    bp_key  = df_sumstats['BP'].astype(str)
+    bp_key  = df_sumstats['BP'].apply(
+        lambda x: str(int(float(x))) if pd.notna(x) else '')
     mask    = (chr_key + ':' + bp_key).isin(hm3_pos)
     df_sumstats = df_sumstats.loc[mask]
     logging.info('Retained %d / %d SNPs overlapping HapMap3 positions'
