@@ -255,22 +255,21 @@ def convert_odds_ratio_to_log(df_sumstats):
 
     df_sumstats = df_sumstats.dropna(subset=['OR'])
 
-    # If there are negative values, assume it already contains log-odds
-    if np.any(df_sumstats['OR']<0):
-        return df_sumstats
-
-    # If they are all greater than zero, log transform
-    if np.all(df_sumstats['OR']>0):
-        df_sumstats['OR'] = np.log(df_sumstats['OR'])
-        logging.info('Converting OR column to log-odds')
-        return df_sumstats
-
-    # Edge case: No negative values, but contains zero(s) — drop with a warning
-    if np.any(df_sumstats['OR']==0):
-        n_zero = int((df_sumstats['OR']==0).sum())
+    # Drop OR=0 before deciding sign
+    n_zero = int((df_sumstats['OR'] == 0).sum())
+    if n_zero > 0:
         import warnings
         warnings.warn('Dropping %d SNPs with OR=0.' % n_zero)
         df_sumstats = df_sumstats.loc[df_sumstats['OR'] != 0]
+
+    # If there are negative values, assume it already contains log-odds
+    if np.any(df_sumstats['OR'] < 0):
+        return df_sumstats
+
+    # All remaining values are positive — log transform
+    df_sumstats['OR'] = np.log(df_sumstats['OR'])
+    logging.info('Converting OR column to log-odds')
+    return df_sumstats
 
         
     
